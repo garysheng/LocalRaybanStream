@@ -1,108 +1,107 @@
-# SpecBridge
+# LocalRaybanStream
 
-SpecBridge is an open-source iOS toolkit that connects Ray-Ban Meta smart glasses to **Twitch**. It serves as a bridge between the Meta Wearables Device Access Toolkit (DAT) and standard broadcasting protocols, allowing developers to build custom live-streaming experiences.
+Stream live video from Ray-Ban Meta smart glasses to any web browser.
 
-*Note: While the underlying architecture supports RTMP (allowing for potential YouTube/Kick support), this version is currently hardcoded for Twitch.*
+> **Fork of [SpecBridge](https://github.com/jasondukes/SpecBridge)** by Jason Dukes.  
+> Original streams to Twitch. This version streams to a local web server instead.
 
-## Features
-- **Live Video Bridge:** Routes raw video frames from Ray-Ban Meta glasses directly to Twitch.
-- **Audio Handling:** Manages iOS audio sessions to prevent Bluetooth disconnects during streaming.
-- **Secure Auth:** Setup screen to input and store your Twitch Stream Key locally on the device.
-- **Modern Swift:** Uses Swift Concurrency (async/await) and the Actor model for thread-safe streaming.
+## How It Works
+
+```
+Ray-Ban Meta Glasses → iPhone App → Node.js Server → Browser
+         (Bluetooth)      (HTTP POST)     (WebSocket)
+```
+
+The iOS app captures video frames from your glasses and POSTs them as JPEGs to a simple Node.js server. The server broadcasts frames to all connected browsers via WebSocket.
 
 ## Prerequisites
 
-Before attempting to build this project, ensure you have the following:
+- **Mac** with Xcode 15+
+- **iPhone** running iOS 17+
+- **Ray-Ban Meta Smart Glasses** (Gen 2) with Developer Mode enabled
+- **Meta View app** installed and paired with your glasses
 
-### Hardware
-- **Mac:** A Mac computer capable of running Xcode.
-- **iPhone:** An iPhone running iOS 17.0 or later.
-- **Smart Glasses:** Ray-Ban Meta Smart Glasses (Gen 2).
+### Enable Developer Mode on Glasses
 
-### Software & Accounts
-- **Xcode 15+:** Required to compile the Swift code.
-- **Meta View App:** Installed on your iPhone and paired with your glasses.
-- **Twitch Account:** To obtain your Stream Key.
+1. Open **Meta View** app on your iPhone
+2. Go to **Devices** → **Settings** → **General** → **About**
+3. Tap the **Version** number 5 times
+4. Toggle **Developer Mode** on
 
-### Important: Enable Developer Mode
-You must enable Developer Mode on your glasses for them to communicate with third-party apps like SpecBridge.
+## Quick Start
 
-1. Open the **Meta View** app on your iPhone.
-2. Navigate to the **Devices** tab (Glasses icon).
-3. Tap the **Gear icon** (Settings) > **General** > **About**.
-4. Tap the **Version** number 5 times repeatedly.
-5. A "Developer Mode" toggle will appear. Switch it to **ON**.
+### 1. Start the Server
 
-## Installation
+```bash
+cd server
+npm install
+npm start
+```
 
-This application is not available on the App Store. You must build and install it directly onto your iPhone using Xcode.
+Note the network IP displayed (e.g., `192.168.1.100`).
 
-1. **Clone the Repository**
-   Download the source code to your Mac.
+### 2. Build the iOS App
 
-2. **Open in Xcode**
-   Double-click `SpecBridge.xcodeproj` to open the project.
+1. Open `SpecBridge.xcodeproj` in Xcode
+2. Select your Apple ID under **Signing & Capabilities**
+3. Connect your iPhone and click **Run**
 
-3. **Resolve Dependencies**
-   Xcode should automatically detect and fetch the required libraries (Meta Wearables DAT and HaishinKit).
-   *Note: If errors appear, go to File > Packages > Resolve Package Versions.*
+### 3. Configure and Stream
 
-4. **Sign the App**
-   - Click the "SpecBridge" project icon in the top-left sidebar.
-   - Select the "SpecBridge" target in the center panel.
-   - Go to the **Signing & Capabilities** tab.
-   - Select your personal Apple ID under the "Team" dropdown.
+1. Tap **Settings** (gear icon) in the app
+2. Enter your server's IP address (from step 1)
+3. Tap **Connect to Glasses** → approve in Meta View app
+4. Tap **Start Stream**
 
-5. **Deploy to iPhone**
-   - Connect your iPhone to your Mac via USB.
-   - Select your iPhone from the device list at the top of the Xcode window.
-   - Click the **Run** (Play) button.
+### 4. View in Browser
 
-## Usage Guide
+Open `http://<server-ip>:3000` on any device on your network.
 
-Once the app is running on your phone, follow this specific sequence to start a stream.
+## Server Endpoints
 
-### 1. Connect to Glasses
-- On the setup screen, tap **Connect**.
-- The app will redirect you to the **Meta View** app.
-- Accept the connection request in Meta View.
-- You will be automatically redirected back to SpecBridge.
-- *Verify:* The status indicator in SpecBridge should show "Connected".
+| Endpoint | Description |
+|----------|-------------|
+| `/` | Web viewer with live feed |
+| `/stream.mjpeg` | MJPEG stream (embeddable in `<img>` tags) |
+| `/ws` | WebSocket for real-time frames |
+| `/api/health` | Health check with stats |
 
-### 2. Configure Stream Key
-- Once connected, the Stream Key field will become active.
-- Enter your **Twitch Stream Key** (found in your Twitch Creator Dashboard > Settings > Stream).
-- Tap **Save & Continue**.
+## Project Structure
 
-### 3. Start Streaming
-- You will see the main dashboard with a camera preview placeholder.
-- Tap **Go Live**.
-- **Wait for Cues:**
-  1. You will hear an audio prompt: "Experience Started".
-  2. The LED on your glasses will turn on.
-  3. The video feed will appear on your iPhone screen.
-- After a few seconds, your stream will be live on Twitch.
+```
+LocalRaybanStream/
+├── SpecBridge/                 # iOS app
+│   ├── SpecBridgeApp.swift     # App entry point
+│   ├── ContentView.swift       # UI
+│   ├── StreamManager.swift     # Glasses connection
+│   └── WebStreamManager.swift  # HTTP frame posting
+│
+├── server/                     # Node.js server
+│   ├── server.js               # Express + WebSocket
+│   └── public/index.html       # Web viewer
+│
+└── SpecBridge.xcodeproj        # Xcode project
+```
 
-### 4. Stop Streaming
-- Tap **Stop All** in the app to end the broadcast.
-- You will hear an audio prompt: "Experience Stopped".
+## Performance
+
+| Metric | Value |
+|--------|-------|
+| Frame Rate | ~15 fps |
+| Latency | 100-300ms (local network) |
+| Bandwidth | ~2-3 Mbps |
 
 ## Known Issues
 
-- **Aspect Ratio Crop:** Currently, the stream broadcasts a 1:1 (Square) crop of the video feed, rather than the full 9:16 vertical video captured by the glasses. I'm investigating a fix for the buffer scaling.
-- **Twitch Only:** This version does not yet support changing the RTMP URL to other services (Kick, YouTube).
+- **Square Crop**: Video is cropped to 1:1 instead of full 9:16 (inherited from original SpecBridge)
+- **No Audio**: Video only; audio streaming would require WebRTC
+- **Local Network Only**: HTTP means no remote streaming without additional setup
 
-## Roadmap
+## Credits
 
-I'm actively working on the following improvements:
-- **Full 9:16 Support:** Fixing the video pipeline to broadcast the full vertical field of view.
-- **Multi-Platform Support:** Adding a settings menu to allow custom RTMP URLs (YouTube, Kick, etc).
-- **UI Polish:** Improving the setup flow and status indicators.
-
-## Disclaimer
-
-This project is an unofficial tool and is not affiliated with, endorsed by, or connected to Meta Platforms, Inc. or Twitch Interactive, Inc. "Ray-Ban Meta" is a trademark of Luxottica Group S.p.A. and Meta Platforms, Inc.
+- **Original SpecBridge**: [Jason Dukes](https://github.com/jasondukes/SpecBridge)
+- **Meta Wearables DAT SDK**: [Meta](https://www.ray-ban.com/usa/discover-ray-ban-meta/clp)
 
 ## License
 
-MIT License. See LICENSE for details.
+MIT License. See [LICENSE](LICENSE) for details.

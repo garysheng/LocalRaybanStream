@@ -15,8 +15,8 @@ class StreamManager: ObservableObject {
     private var streamSession: StreamSession?
     private var token: AnyListenerToken?
     
-    // Reference to Twitch Manager
-    var twitchManager: TwitchManager?
+    // Reference to web stream manager
+    var webManager: WebStreamManager?
     
     private func configureAudio() {
         let session = AVAudioSession.sharedInstance()
@@ -70,14 +70,9 @@ class StreamManager: ObservableObject {
                 }
             }
             
-            // 2. Extract the RAW buffer for Twitch
-            // FIX: Accessed directly (no 'if let' needed for sampleBuffer)
+            // 2. Extract the RAW buffer and send to web server
             let buffer = frame.sampleBuffer
-            
-            // Hand off to TwitchManager (wrapped in Task to jump threads safely)
-            Task { @MainActor in
-                self?.twitchManager?.processVideoFrame(buffer)
-            }
+            self?.webManager?.processVideoFrame(buffer)
         }
         
         status = "Starting stream..."
@@ -88,8 +83,7 @@ class StreamManager: ObservableObject {
         status = "Stopping..."
         await streamSession?.stop()
         
-        // Ensure Twitch stops when glasses stop
-        await twitchManager?.stopBroadcast()
+        webManager?.stopStreaming()
         
         status = "Ready to Stream"
         isStreaming = false

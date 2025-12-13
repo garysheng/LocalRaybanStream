@@ -24,3 +24,9 @@ DerivedData
 # Keys (Keep these secret!)
 Secrets.swift
 TwitchKeys.plist
+
+# Node.js
+node_modules/
+server/node_modules/
+.env
+*.log
