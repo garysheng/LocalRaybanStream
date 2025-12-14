@@ -13,6 +13,7 @@ import Combine
 enum ViolationSound {
     case shoes
     case gloves
+    case both
 }
 
 @MainActor
@@ -21,10 +22,12 @@ class AudioManager: ObservableObject {
     
     private var shoesPlayer: AVAudioPlayer?
     private var glovesPlayer: AVAudioPlayer?
+    private var bothPlayer: AVAudioPlayer?
     
     // Track last play time for each violation type (10 second cooldown)
     private var lastShoesAlertTime: Date = .distantPast
     private var lastGlovesAlertTime: Date = .distantPast
+    private var lastBothAlertTime: Date = .distantPast
     private let cooldownInterval: TimeInterval = 10.0
     
     init() {
@@ -59,6 +62,20 @@ class AudioManager: ObservableObject {
         } else {
             print("AudioManager: gloves.mp3 not found in bundle")
         }
+        
+        // Prepare both audio
+        if let bothURL = Bundle.main.url(forResource: "both", withExtension: "mp3") {
+            do {
+                bothPlayer = try AVAudioPlayer(contentsOf: bothURL)
+                bothPlayer?.prepareToPlay()
+                bothPlayer?.volume = 1.0
+                print("AudioManager: both.mp3 prepared successfully")
+            } catch {
+                print("AudioManager: Failed to prepare both.mp3 - \(error.localizedDescription)")
+            }
+        } else {
+            print("AudioManager: both.mp3 not found in bundle")
+        }
     }
     
     /// Force audio to play through phone speaker, not Bluetooth
@@ -85,7 +102,7 @@ class AudioManager: ObservableObject {
         let now = Date()
         
         // Force audio through phone speaker to avoid interrupting Bluetooth
-        forcePhoneSpeaker()
+         forcePhoneSpeaker()
         
         switch sound {
         case .shoes:
@@ -130,6 +147,27 @@ class AudioManager: ObservableObject {
                 isPlaying = true
                 updatePlayingState(after: player.duration)
             }
+            
+        case .both:
+            guard now.timeIntervalSince(lastBothAlertTime) >= cooldownInterval else {
+                print("AudioManager: Both alert on cooldown")
+                return
+            }
+            
+            guard let player = bothPlayer else {
+                print("AudioManager: No both player available")
+                return
+            }
+            
+            player.currentTime = 0
+            let success = player.play()
+            print("AudioManager: Playing both warning - success: \(success)")
+            
+            if success {
+                lastBothAlertTime = now
+                isPlaying = true
+                updatePlayingState(after: player.duration)
+            }
         }
     }
     
@@ -153,7 +191,7 @@ class AudioManager: ObservableObject {
         Task {
             try? await Task.sleep(for: .seconds(duration + 0.1))
             await MainActor.run {
-                if shoesPlayer?.isPlaying != true && glovesPlayer?.isPlaying != true {
+                if shoesPlayer?.isPlaying != true && glovesPlayer?.isPlaying != true && bothPlayer?.isPlaying != true {
                     self.isPlaying = false
                     // Restore normal audio routing after playback
                     self.restoreAudioRoute()
@@ -165,6 +203,7 @@ class AudioManager: ObservableObject {
     func stopAudio() {
         shoesPlayer?.stop()
         glovesPlayer?.stop()
+        bothPlayer?.stop()
         isPlaying = false
     }
 }

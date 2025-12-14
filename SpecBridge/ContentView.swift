@@ -5,6 +5,8 @@ import UIKit
 struct ContentView: View {
     @AppStorage("server_host") private var serverHost: String = "192.168.1.100"
     @AppStorage("server_port") private var serverPort: Int = 3000
+    @AppStorage("policy_shoes") private var policyShoes: Bool = true
+    @AppStorage("policy_gloves") private var policyGloves: Bool = true
     
     @StateObject private var streamManager = StreamManager()
     @StateObject private var webManager = WebStreamManager()
@@ -183,7 +185,9 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(
                 serverHost: $serverHost,
-                serverPort: $serverPort
+                serverPort: $serverPort,
+                policyShoes: $policyShoes,
+                policyGloves: $policyGloves
             )
         }
     }
@@ -284,32 +288,26 @@ struct ContentView: View {
         guard let frame = streamManager.currentFrame else { return }
         
         if let result = await visionAnalyzer.analyzeFrame(frame) {
-            if result.isViolation {
-                switch result.violationType {
-                case .noShoes:
-                    analysisStatus = .violationShoes
-                    triggerHapticWarning()
-                    audioManager.playWarning(for: .shoes)
-                    webManager.sendViolation(type: "shoes", message: "Shoes required!")
-                case .noGloves:
-                    analysisStatus = .violationGloves
-                    triggerHapticWarning()
-                    audioManager.playWarning(for: .gloves)
-                    webManager.sendViolation(type: "gloves", message: "Gloves required!")
-                case .both:
-                    analysisStatus = .violationBoth
-                    triggerHapticWarning()
-                    audioManager.playWarnings(shoes: true, gloves: true)
-                    webManager.sendViolation(type: "both", message: "Shoes and gloves required!")
-                case .none:
-                    analysisStatus = .safe
-                    webManager.clearViolation()
-                }
-            } else if result.hasLegsOrFeet || result.hasHands {
-                analysisStatus = .safe
-                webManager.clearViolation()
+            // Check violations based on enabled policies
+            let shoeViolation = policyShoes && result.hasLegsOrFeet && !result.hasShoes
+            let gloveViolation = policyGloves && result.hasHands && !result.hasGloves
+            
+            if shoeViolation && gloveViolation {
+                analysisStatus = .violationBoth
+                triggerHapticWarning()
+                audioManager.playWarning(for: .both)
+                webManager.sendViolation(type: "both", message: "Shoes and gloves required!")
+            } else if shoeViolation {
+                analysisStatus = .violationShoes
+                triggerHapticWarning()
+                audioManager.playWarning(for: .shoes)
+                webManager.sendViolation(type: "shoes", message: "Shoes required!")
+            } else if gloveViolation {
+                analysisStatus = .violationGloves
+                triggerHapticWarning()
+                audioManager.playWarning(for: .gloves)
+                webManager.sendViolation(type: "gloves", message: "Gloves required!")
             } else {
-                // Nothing to check visible
                 analysisStatus = .safe
                 webManager.clearViolation()
             }
@@ -343,11 +341,30 @@ struct ContentView: View {
 struct SettingsView: View {
     @Binding var serverHost: String
     @Binding var serverPort: Int
+    @Binding var policyShoes: Bool
+    @Binding var policyGloves: Bool
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
         NavigationStack {
             Form {
+                Section("Policy Enforcement") {
+                    Toggle(isOn: $policyShoes) {
+                        HStack {
+                            Image(systemName: "shoe.2.fill")
+                                .foregroundStyle(policyShoes ? .orange : .gray)
+                            Text("Require Shoes")
+                        }
+                    }
+                    Toggle(isOn: $policyGloves) {
+                        HStack {
+                            Image(systemName: "hand.raised.fill")
+                                .foregroundStyle(policyGloves ? .orange : .gray)
+                            Text("Require Gloves")
+                        }
+                    }
+                }
+                
                 Section("Server Configuration") {
                     HStack {
                         Text("Host")
