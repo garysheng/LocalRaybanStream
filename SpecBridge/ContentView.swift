@@ -289,14 +289,17 @@ struct ContentView: View {
                 case .noShoes:
                     analysisStatus = .violationShoes
                     triggerHapticWarning()
+                    audioManager.playWarning(for: .shoes)
                     webManager.sendViolation(type: "shoes", message: "Shoes required!")
                 case .noGloves:
                     analysisStatus = .violationGloves
                     triggerHapticWarning()
+                    audioManager.playWarning(for: .gloves)
                     webManager.sendViolation(type: "gloves", message: "Gloves required!")
                 case .both:
                     analysisStatus = .violationBoth
                     triggerHapticWarning()
+                    audioManager.playWarnings(shoes: true, gloves: true)
                     webManager.sendViolation(type: "both", message: "Shoes and gloves required!")
                 case .none:
                     analysisStatus = .safe

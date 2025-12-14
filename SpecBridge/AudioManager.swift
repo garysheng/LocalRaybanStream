@@ -2,7 +2,8 @@
 //  AudioManager.swift
 //  SpecBridge
 //
-//  Handles audio playback through the Ray-Ban Meta glasses speakers.
+//  Handles audio playback through the PHONE SPEAKER (not Bluetooth).
+//  This avoids interrupting the wearables Bluetooth session.
 //
 
 import Foundation
@@ -36,7 +37,7 @@ class AudioManager: ObservableObject {
             do {
                 shoesPlayer = try AVAudioPlayer(contentsOf: shoesURL)
                 shoesPlayer?.prepareToPlay()
-                shoesPlayer?.volume = 0.8  // Slightly lower volume
+                shoesPlayer?.volume = 1.0
                 print("AudioManager: shoes.mp3 prepared successfully")
             } catch {
                 print("AudioManager: Failed to prepare shoes.mp3 - \(error.localizedDescription)")
@@ -50,7 +51,7 @@ class AudioManager: ObservableObject {
             do {
                 glovesPlayer = try AVAudioPlayer(contentsOf: glovesURL)
                 glovesPlayer?.prepareToPlay()
-                glovesPlayer?.volume = 0.8
+                glovesPlayer?.volume = 1.0
                 print("AudioManager: gloves.mp3 prepared successfully")
             } catch {
                 print("AudioManager: Failed to prepare gloves.mp3 - \(error.localizedDescription)")
@@ -60,11 +61,31 @@ class AudioManager: ObservableObject {
         }
     }
     
+    /// Force audio to play through phone speaker, not Bluetooth
+    private func forcePhoneSpeaker() {
+        do {
+            // Override audio route to force speaker output
+            try AVAudioSession.sharedInstance().overrideOutputAudioPort(.speaker)
+            print("AudioManager: Forced output to phone speaker")
+        } catch {
+            print("AudioManager: Failed to override audio port - \(error)")
+        }
+    }
+    
+    /// Restore normal audio routing after playback
+    private func restoreAudioRoute() {
+        do {
+            try AVAudioSession.sharedInstance().overrideOutputAudioPort(.none)
+        } catch {
+            print("AudioManager: Failed to restore audio port - \(error)")
+        }
+    }
+    
     func playWarning(for sound: ViolationSound) {
         let now = Date()
         
-        // DO NOT reconfigure audio session - let StreamManager's config handle it
-        // Any audio session changes can interrupt the wearables session
+        // Force audio through phone speaker to avoid interrupting Bluetooth
+        forcePhoneSpeaker()
         
         switch sound {
         case .shoes:
@@ -134,6 +155,8 @@ class AudioManager: ObservableObject {
             await MainActor.run {
                 if shoesPlayer?.isPlaying != true && glovesPlayer?.isPlaying != true {
                     self.isPlaying = false
+                    // Restore normal audio routing after playback
+                    self.restoreAudioRoute()
                 }
             }
         }
