@@ -22,8 +22,13 @@ class StreamManager: ObservableObject {
         let session = AVAudioSession.sharedInstance()
         do {
             // Sets iOS to allow Bluetooth audio (prevents "Video Paused" error)
-            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetooth, .allowBluetoothA2DP, .defaultToSpeaker])
-            try session.setActive(true)
+            // .mixWithOthers allows warning audio to play without interrupting the stream
+            try session.setCategory(
+                .playAndRecord,
+                mode: .default,
+                options: [.allowBluetooth, .allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers]
+            )
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
             print("Audio session configured successfully")
         } catch {
             print("Failed to configure audio session: \(error)")
@@ -31,14 +36,33 @@ class StreamManager: ObservableObject {
     }
     
     func startStreaming() async {
+        // Check if already streaming
+        guard !isStreaming else {
+            print("Already streaming, ignoring start request")
+            return
+        }
+        
         status = "Checking permissions..."
         
+        // Check current permission status
         let currentStatus = try? await Wearables.shared.checkPermissionStatus(.camera)
+        print("Current camera permission status: \(String(describing: currentStatus))")
+        
         if currentStatus != .granted {
             status = "Requesting permission..."
-            let requestResult = try? await Wearables.shared.requestPermission(.camera)
-            if requestResult != .granted {
-                status = "Permission denied. Check Meta AI app."
+            print("Requesting camera permission...")
+            
+            do {
+                let requestResult = try await Wearables.shared.requestPermission(.camera)
+                print("Permission request result: \(requestResult)")
+                
+                if requestResult != .granted {
+                    status = "Permission denied. Open Meta AI app to grant access."
+                    return
+                }
+            } catch {
+                print("Permission request error: \(error)")
+                status = "Permission error. Try again."
                 return
             }
         }

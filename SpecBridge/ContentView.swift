@@ -1,5 +1,6 @@
 import SwiftUI
 import MWDATCore
+import UIKit
 
 struct ContentView: View {
     @AppStorage("server_host") private var serverHost: String = "192.168.1.100"
@@ -7,19 +8,34 @@ struct ContentView: View {
     
     @StateObject private var streamManager = StreamManager()
     @StateObject private var webManager = WebStreamManager()
+    @StateObject private var visionAnalyzer = VisionAnalyzer()
+    @StateObject private var audioManager = AudioManager()
     
     @State private var showSettings = false
     @State private var isRegistered = false
+    @State private var analysisStatus: AnalysisStatus = .idle
+    @State private var analysisTimer: Timer?
+    @State private var isStartingStream = false
+    
+    enum AnalysisStatus: Equatable {
+        case idle
+        case analyzing
+        case safe
+        case violationShoes
+        case violationGloves
+        case violationBoth
+        case error(String)
+    }
     
     var body: some View {
         VStack(spacing: 24) {
             // Header
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("LocalRaybanStream")
+                    Text("PolicyAngel")
                         .font(.title2)
                         .fontWeight(.bold)
-                    Text("Stream to Browser")
+                    Text("PPE Compliance Monitor")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -54,10 +70,11 @@ struct ContentView: View {
                     }
                 }
                 
-                // Live indicator
-                if streamManager.isStreaming {
-                    VStack {
-                        HStack {
+                // Status indicators overlay
+                VStack {
+                    HStack {
+                        // Live indicator
+                        if streamManager.isStreaming {
                             HStack(spacing: 6) {
                                 Circle()
                                     .fill(.red)
@@ -71,12 +88,16 @@ struct ContentView: View {
                             .background(.red.opacity(0.9))
                             .foregroundColor(.white)
                             .cornerRadius(6)
-                            Spacer()
                         }
+                        
                         Spacer()
+                        
+                        // Analysis status badge
+                        analysisStatusBadge
                     }
-                    .padding(12)
+                    Spacer()
                 }
+                .padding(12)
             }
             .frame(height: 400)
             .padding(.horizontal)
@@ -90,10 +111,10 @@ struct ContentView: View {
                     isActive: streamManager.isStreaming
                 )
                 StatusCard(
-                    icon: "server.rack",
-                    title: "Server",
-                    status: webManager.connectionStatus,
-                    isActive: webManager.isStreaming
+                    icon: "hand.raised.fill",
+                    title: "PPE Status",
+                    status: safetyStatusText,
+                    isActive: analysisStatus == .safe
                 )
             }
             .padding(.horizontal)
@@ -116,17 +137,25 @@ struct ContentView: View {
                 Button {
                     Task {
                         if streamManager.isStreaming {
+                            stopAnalysisTimer()
                             await streamManager.stopStreaming()
                             webManager.stopStreaming()
+                            analysisStatus = .idle
+                            isStartingStream = false
                         } else {
+                            guard !isStartingStream else { return }
+                            isStartingStream = true
                             webManager.updateServerURL(host: serverHost, port: serverPort)
                             webManager.startStreaming()
                             await streamManager.startStreaming()
+                            // Always start the timer - it will wait for frames
+                            startAnalysisTimer()
+                            isStartingStream = false
                         }
                     }
                 } label: {
                     Label(
-                        streamManager.isStreaming ? "Stop Stream" : "Start Stream",
+                        streamManager.isStreaming ? "Stop Monitoring" : (isStartingStream ? "Starting..." : "Start Monitoring"),
                         systemImage: streamManager.isStreaming ? "stop.fill" : "play.fill"
                     )
                     .frame(maxWidth: .infinity)
@@ -134,12 +163,16 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(streamManager.isStreaming ? .red : .green)
                 .controlSize(.large)
+                .disabled(isStartingStream && !streamManager.isStreaming)
             }
             .padding(.horizontal)
             .padding(.bottom)
         }
         .onAppear {
             streamManager.webManager = webManager
+        }
+        .onDisappear {
+            stopAnalysisTimer()
         }
         .onOpenURL { url in
             Task {
@@ -148,8 +181,158 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView(serverHost: $serverHost, serverPort: $serverPort)
+            SettingsView(
+                serverHost: $serverHost,
+                serverPort: $serverPort
+            )
         }
+    }
+    
+    @ViewBuilder
+    private var analysisStatusBadge: some View {
+        switch analysisStatus {
+        case .idle, .analyzing:
+            EmptyView()
+        case .safe:
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption)
+                Text("SAFE")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.green.opacity(0.9))
+            .foregroundColor(.white)
+            .cornerRadius(6)
+        case .violationShoes:
+            HStack(spacing: 4) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                Text("SHOES REQUIRED")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.red.opacity(0.9))
+            .foregroundColor(.white)
+            .cornerRadius(6)
+        case .violationGloves:
+            HStack(spacing: 4) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                Text("GLOVES REQUIRED")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.orange.opacity(0.9))
+            .foregroundColor(.white)
+            .cornerRadius(6)
+        case .violationBoth:
+            HStack(spacing: 4) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                Text("PPE VIOLATION")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.red.opacity(0.9))
+            .foregroundColor(.white)
+            .cornerRadius(6)
+        case .error:
+            HStack(spacing: 4) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption)
+                Text("ERROR")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.gray.opacity(0.9))
+            .foregroundColor(.white)
+            .cornerRadius(6)
+        }
+    }
+    
+    private var safetyStatusText: String {
+        switch analysisStatus {
+        case .idle, .analyzing:
+            return "Monitoring"
+        case .safe:
+            return "PPE compliant"
+        case .violationShoes:
+            return "⚠️ Shoes required!"
+        case .violationGloves:
+            return "⚠️ Gloves required!"
+        case .violationBoth:
+            return "⚠️ Shoes & gloves required!"
+        case .error(let msg):
+            return "Error: \(msg)"
+        }
+    }
+    
+    private func analyzeCurrentFrame() async {
+        // Skip if already analyzing
+        guard !visionAnalyzer.isAnalyzing else { return }
+        guard let frame = streamManager.currentFrame else { return }
+        
+        if let result = await visionAnalyzer.analyzeFrame(frame) {
+            if result.isViolation {
+                switch result.violationType {
+                case .noShoes:
+                    analysisStatus = .violationShoes
+                    triggerHapticWarning()
+                    webManager.sendViolation(type: "shoes", message: "Shoes required!")
+                case .noGloves:
+                    analysisStatus = .violationGloves
+                    triggerHapticWarning()
+                    webManager.sendViolation(type: "gloves", message: "Gloves required!")
+                case .both:
+                    analysisStatus = .violationBoth
+                    triggerHapticWarning()
+                    webManager.sendViolation(type: "both", message: "Shoes and gloves required!")
+                case .none:
+                    analysisStatus = .safe
+                    webManager.clearViolation()
+                }
+            } else if result.hasLegsOrFeet || result.hasHands {
+                analysisStatus = .safe
+                webManager.clearViolation()
+            } else {
+                // Nothing to check visible
+                analysisStatus = .safe
+                webManager.clearViolation()
+            }
+        } else {
+            analysisStatus = .error(visionAnalyzer.lastError ?? "Unknown error")
+        }
+    }
+    
+    private func startAnalysisTimer() {
+        // Analyze every 2 seconds
+        analysisTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            Task { @MainActor in
+                await analyzeCurrentFrame()
+            }
+        }
+    }
+    
+    private func stopAnalysisTimer() {
+        analysisTimer?.invalidate()
+        analysisTimer = nil
+    }
+    
+    /// Use haptic feedback instead of audio to avoid interrupting wearables session
+    private func triggerHapticWarning() {
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.error)
     }
 }
 
@@ -222,7 +405,7 @@ struct StatusCard: View {
             Text(status)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .lineLimit(2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)

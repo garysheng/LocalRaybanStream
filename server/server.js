@@ -10,11 +10,17 @@ const PORT = process.env.PORT || 3000;
 let latestFrame = null;
 let frameCount = 0;
 
+// Store latest violation status
+let currentViolation = null;
+
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Parse raw binary body for frame uploads
 app.use('/api/frame', express.raw({ type: 'image/jpeg', limit: '5mb' }));
+
+// Parse JSON for violation endpoint
+app.use('/api/violation', express.json());
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -22,8 +28,55 @@ app.get('/api/health', (req, res) => {
     status: 'ok', 
     hasFrame: latestFrame !== null,
     frameCount,
-    clients: wss.clients.size
+    clients: wss.clients.size,
+    currentViolation
   });
+});
+
+// Receive violation alerts from iOS app
+app.post('/api/violation', (req, res) => {
+  const { type, message, timestamp } = req.body;
+  
+  currentViolation = {
+    type: type || 'unknown',      // 'shoes', 'gloves', 'both', 'safe'
+    message: message || '',
+    timestamp: timestamp || Date.now(),
+    receivedAt: Date.now()
+  };
+  
+  console.log(`⚠️  VIOLATION: ${currentViolation.type} - ${currentViolation.message}`);
+  
+  // Broadcast violation to all WebSocket clients
+  const violationMessage = JSON.stringify({
+    type: 'violation',
+    data: currentViolation
+  });
+  
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) {
+      client.send(violationMessage);
+    }
+  });
+  
+  res.json({ status: 'ok', violation: currentViolation });
+});
+
+// Clear violation (when status returns to safe)
+app.post('/api/violation/clear', (req, res) => {
+  currentViolation = null;
+  
+  const clearMessage = JSON.stringify({
+    type: 'violation_clear',
+    timestamp: Date.now()
+  });
+  
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) {
+      client.send(clearMessage);
+    }
+  });
+  
+  res.json({ status: 'ok' });
 });
 
 // Receive frames from iOS app

@@ -41,9 +41,54 @@ class WebStreamManager: ObservableObject {
         self.session = URLSession(configuration: config)
     }
     
+    private var baseURL: String = "http://192.168.1.100:3000"
+    
     func updateServerURL(host: String, port: Int) {
-        self.serverURL = URL(string: "http://\(host):\(port)/api/frame")!
+        self.baseURL = "http://\(host):\(port)"
+        self.serverURL = URL(string: "\(baseURL)/api/frame")!
         print("Server URL updated to: \(serverURL)")
+    }
+    
+    /// Send a violation alert to the server for broadcasting to web clients
+    func sendViolation(type: String, message: String) {
+        guard isStreaming else { return }
+        
+        let violationURL = URL(string: "\(baseURL)/api/violation")!
+        var request = URLRequest(url: violationURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = [
+            "type": type,
+            "message": message,
+            "timestamp": Date().timeIntervalSince1970 * 1000
+        ]
+        
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        Task {
+            do {
+                let (_, response) = try await session.data(for: request)
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                    print("WebStreamManager: Violation sent - \(type)")
+                }
+            } catch {
+                print("WebStreamManager: Failed to send violation - \(error)")
+            }
+        }
+    }
+    
+    /// Clear the violation status on the server
+    func clearViolation() {
+        guard isStreaming else { return }
+        
+        let clearURL = URL(string: "\(baseURL)/api/violation/clear")!
+        var request = URLRequest(url: clearURL)
+        request.httpMethod = "POST"
+        
+        Task {
+            _ = try? await session.data(for: request)
+        }
     }
     
     func startStreaming() {

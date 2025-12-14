@@ -291,7 +291,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SpecBridge/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = SpecBridge;
+				INFOPLIST_KEY_CFBundleDisplayName = PolicyAngel;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Need to connect to Ray-Ban Meta glasses";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Required for streaming video from Ray-Ban Meta glasses.";
@@ -343,7 +343,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SpecBridge/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = SpecBridge;
+				INFOPLIST_KEY_CFBundleDisplayName = PolicyAngel;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Need to connect to Ray-Ban Meta glasses";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Required for streaming video from Ray-Ban Meta glasses.";
