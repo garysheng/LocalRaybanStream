@@ -319,8 +319,8 @@ struct ContentView: View {
     }
     
     private func startAnalysisTimer() {
-        // Analyze every 2 seconds
-        analysisTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+        // Analyze every 1 second
+        analysisTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             Task { @MainActor in
                 await analyzeCurrentFrame()
             }
